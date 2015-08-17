@@ -1,0 +1,50 @@
+set search_path to pocs, '$user', public;
+set wlm_query_slot_count to 5;
+
+m4_define(`LQ',`m4_changequote(<,>)`m4_dnl'
+m4_changequote`'')
+m4_define(`RQ',`m4_changequote(<,>)m4_dnl`
+'m4_changequote`'')
+
+\set credentials aws_access_key_id=__AWS_ACCESS_KEY_ID__;aws_secret_access_key=__AWS_SECRET_ACCESS_KEY__
+
+copy customer
+from 's3://__AWS_CF_STACK_NAME__/__BUILD_TIME__/__SCALE_FACTOR__/customer.manifest'
+credentials :'credentials'
+delimiter '|'
+ssh
+gzip
+dateformat 'YYYYMMDD'
+;
+
+copy dwdate from 's3://__AWS_CF_STACK_NAME__/__BUILD_TIME__/__SCALE_FACTOR__/date.manifest'
+credentials :'credentials'
+delimiter '|'
+ssh
+gzip
+dateformat 'YYYYMMDD'
+;
+
+copy lineorder from 's3://__AWS_CF_STACK_NAME__/__BUILD_TIME__/__SCALE_FACTOR__/lineorder.manifest'
+credentials :'credentials'
+delimiter '|'
+ssh
+gzip
+dateformat 'YYYYMMDD'
+;
+
+copy part from 's3://__AWS_CF_STACK_NAME__/__BUILD_TIME__/__SCALE_FACTOR__/part.manifest'
+credentials :'credentials'
+delimiter '|'
+ssh
+gzip
+dateformat 'YYYYMMDD'
+;
+
+copy supplier from 's3://__AWS_CF_STACK_NAME__/__BUILD_TIME__/__SCALE_FACTOR__/supplier.manifest'
+credentials :'credentials'
+delimiter '|'
+ssh
+gzip
+dateformat 'YYYYMMDD'
+;

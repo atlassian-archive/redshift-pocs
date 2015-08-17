@@ -1,0 +1,12 @@
+file_client: local
+
+file_roots:
+  base:
+    - /srv/salt/base
+
+pillar_roots:
+  base:
+    - /srv/pillar
+
+jinja_trim_blocks: True
+jinja_lstrip_blocks: True

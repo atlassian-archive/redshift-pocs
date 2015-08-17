@@ -1,0 +1,13 @@
+set search_path to pocs, '$user', public;
+
+drop table if exists dwdate2;
+drop table if exists orders_single cascade;
+drop table if exists orders_compound cascade;
+drop table if exists orders_interleaved_4 cascade;
+drop table if exists orders_interleaved_8 cascade;
+drop table if exists orders_interleaved_skew_custkey cascade;
+drop table if exists orders_interleaved_skew_date cascade;
+drop table if exists orders_current cascade;
+drop table if exists orders_archive cascade;
+drop view if exists orders_view cascade;
+

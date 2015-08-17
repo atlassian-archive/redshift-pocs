@@ -1,0 +1,222 @@
+m4_include(`quote.m4')m4_dnl
+m4_include(`foreachq.m4')m4_dnl
+m4_include(`forloop.m4')m4_dnl
+
+m4_define(`LQ',`m4_changequote(<,>)`m4_dnl'
+m4_changequote`'')
+m4_define(`RQ',`m4_changequote(<,>)m4_dnl`
+'m4_changequote`'')
+
+\pset pager off
+set search_path to pocs, RQ()$user`'RQ(), public;
+
+-- Define benchmark tables
+m4_define(
+  __BENCH_TABLES__,
+  `orders_single, orders_compound, orders_interleaved_4, orders_interleaved_8, orders_interleaved_skew_custkey, orders_interleaved_skew_date, orders_view'm4_dnl
+)m4_dnl
+
+drop view if exists bench_tables;
+create view bench_tables
+as
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `select __COUNTER__ id, RQ()__TABLE__`'RQ() "table" union m4_define(`__COUNTER__', m4_incr(__COUNTER__))'
+)m4_dnl
+select 0, null
+;
+
+-- Query 1
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q1.__COUNTER__ */
+    select max(lo_revenue), min(lo_revenue)
+    from __TABLE__
+    where c_custkey < 100000;
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 2
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q2.__COUNTER__ */
+    select max(lo_revenue), min(lo_revenue)
+    from __TABLE__
+    where c_region = RQ()ASIA`'RQ()
+    and c_mktsegment = RQ()FURNITURE`'RQ();
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 3
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q3.__COUNTER__ */
+    select max(lo_revenue), min(lo_revenue)
+    from __TABLE__
+    where d_date between RQ()01/01/1996`'RQ() and RQ()01/14/1996`'RQ()
+    and c_mktsegment = RQ()FURNITURE`'RQ()
+    and c_region = RQ()ASIA`'RQ();
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 4
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q4.__COUNTER__ */
+    with
+    t1 as (
+      select c_custkey, max(lo_revenue), min(lo_revenue)
+      from __TABLE__
+      group by c_custkey
+    )
+    select sum(max + min) from t1;
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 5
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q5.__COUNTER__ */
+    with
+    t1 as (
+      select d_date, max(lo_revenue), min(lo_revenue)
+      from __TABLE__
+      group by d_date
+    )
+    select sum(max + min) from t1;
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 6
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q6.__COUNTER__ */
+    select c_custkey
+    from __TABLE__
+    order by c_custkey
+    limit 10;
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 7
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q7.__COUNTER__ */
+    select d_date
+    from __TABLE__
+    order by d_date
+    limit 10;
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 8
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q8.__COUNTER__ */
+    select count(*)
+    from __TABLE__ o, customer c
+    where o.c_custkey = c.c_custkey;
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Query 9
+m4_define(`__COUNTER__', 1)m4_dnl
+m4_foreachq(
+  __TABLE__,
+  m4_quote(__BENCH_TABLES__),
+  `m4_forloop(
+    __I__,
+    `1',
+    `3',
+    `
+    /* POC-BENCH-Q9.__COUNTER__ */
+    select count(*)
+    from __TABLE__ o, dwdate2 d
+    where o.d_date = d.d_date2;
+    'm4_dnl
+  )m4_define(`__COUNTER__', m4_incr(__COUNTER__))'m4_dnl
+)m4_dnl
+
+-- Compile results
+drop table if exists bench_results;
+create table bench_results
+as
+select
+  substring(s.substring, 15, 1) as query_id,
+  substring(s.substring, 17, 1) as table_id,
+  b.table,
+  avg(s.elapsed)
+from svl_qlog s
+join bench_tables b on substring(s.substring, 17, 1) = b.id
+where substring like '%POC-BENCH-%'
+group by
+  substring(substring, 15, 1),
+  substring(substring, 17, 1),
+  b.table
+;

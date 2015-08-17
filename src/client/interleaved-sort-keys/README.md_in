@@ -1,0 +1,15 @@
+## Interleaved Sort Keys
+
+### DDL Times
+
+ Scale | Rows |  Size  | RS Inst Type | RS # |      Time | $/hr
+-------+------+--------+--------------+------+-----------+-------
+100      600 M    60 GB      dc1.large      4     2:44:04
+1000       6 B   600 GB    dc1.8xlarge      4    19:48:10
+
+### Benchmark Times
+
+ Scale | Rows |  Size  | RS Inst Type | RS # |      Time | $/hr
+-------+------+--------+--------------+------+-----------+-------
+100      600 M    60 GB      dc1.large      4       17:30
+1000       6 B   600 GB    dc1.8xlarge      4       24:08

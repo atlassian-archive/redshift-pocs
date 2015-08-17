@@ -1,0 +1,77 @@
+require 'json'
+
+$salt_version = 'v2014.1.10'
+# vagrant box add aws https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box
+$box = 'aws'
+$aws_cf_stack_name = ARGV[-1].split('-')[0]
+$component = ARGV[-1].split('-')[1]
+$aws_cf = JSON.parse(`aws --region #{ENV['AWS_REGION']} cloudformation describe-stacks --stack-name #{$aws_cf_stack_name}`)
+
+Vagrant.configure('2') do |config|
+
+  config.vm.provider :aws do |aws, override|
+    aws.access_key_id = ENV['AWS_ACCESS_KEY_ID']
+    aws.secret_access_key = ENV['AWS_SECRET_ACCESS_KEY']
+    aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+    override.ssh.private_key_path = ENV['SSH_KEY_PATH']
+    override.ssh.username = 'ubuntu'
+    aws.ami = 'ami-5189a661'
+    aws.instance_type = 't2.micro'
+    aws.region = ENV['AWS_REGION']
+    aws.subnet_id = $aws_cf['Stacks'][0]['Outputs'][0]['OutputValue']
+    case $component
+    when "client"
+      $aws_cf['Stacks'][0]['Outputs'].each do |output|
+        case output['OutputKey']
+        when "ClientSecurityGroupId"
+          aws.security_groups = output['OutputValue']
+        when "ClientIAMInstanceProfileARN"
+          aws.iam_instance_profile_arn = output['OutputValue']
+        end
+      end
+    when "worker"
+      $aws_cf['Stacks'][0]['Outputs'].each do |output|
+        case output['OutputKey']
+        when "WorkerSecurityGroupId"
+          aws.security_groups = output['OutputValue']
+        when "WorkerIAMInstanceProfileARN"
+          aws.iam_instance_profile_arn = output['OutputValue']
+        end
+      end
+    end
+    aws.associate_public_ip = true
+  end
+
+  config.vm.provision :salt do |salt|
+    salt.install_master = false
+    salt.install_type = 'git'
+    salt.install_args = $salt_version
+    salt.always_install = true
+    salt.bootstrap_script = 'salt/config/bootstrap-salt.sh'
+    salt.minion_config = 'salt/config/minion'
+    salt.run_highstate = true
+    salt.colorize = true
+    salt.verbose = true
+    salt.pillar({
+      'aws' => {
+        'AWS_ACCESS_KEY_ID' => ENV['AWS_ACCESS_KEY_ID'],
+        'AWS_SECRET_ACCESS_KEY' => ENV['AWS_SECRET_ACCESS_KEY'],
+        'region' => "#{ENV['AWS_REGION']}",
+        "cf" => { 'stack' => "#{$aws_cf_stack_name}" }
+      },
+      'component' => $component
+    })
+  end
+
+  config.vm.define "#{$aws_cf_stack_name}-#{$component}" do |node|
+    node.vm.box = $box
+    node.vm.hostname = "#{$aws_cf_stack_name}-#{$component}"
+    node.vm.synced_folder   '.',    '/vagrant',                   type: 'rsync',   disabled: true
+    node.vm.synced_folder   'salt', '/srv/salt/base',             type: 'rsync',   disabled: false
+    node.vm.synced_folder   '..',   '/srv/salt/base/pocs/code',   type: 'rsync',   disabled: false
+    node.vm.provider :aws do |aws, override|
+      aws.tags = { 'Name' => "#{$aws_cf_stack_name}-#{$component}" }
+    end
+  end
+
+end

@@ -1,0 +1,41 @@
+m4_include(`quote.m4')m4_dnl
+m4_include(`foreachq.m4')m4_dnl
+m4_include(`forloop.m4')m4_dnl
+
+m4_ifelse(
+  m4_eval(__TOTAL_CORES__ < 2), 1,
+  `m4_define(__SEQUENTIAL__)',
+  `'
+)m4_dnl
+
+m4_define(__WORKER__, 1)m4_dnl
+
+m4_define(
+  __PARALLEL__,
+  `m4_foreachq(
+    __HOST__,
+    m4_quote(m4_translit(__WORKER_HOSTS__, `_', `, ')),
+    `m4_forloop(
+      __CORE__,
+      m4_eval(((__WORKER__ - 1) * __CORES_PER_WORKER__) + 1),
+      m4_eval(__WORKER__ * __CORES_PER_WORKER__),
+      `{"endpoint": "__HOST__",
+        "command": "/home/__SSH_USERNAME__/pocs/pocs/vendor/ssb-dbgen/gen_data.sh -T l -S __CORE__ -C __TOTAL_CORES__ -s __SCALE_FACTOR__ -t lineorder.tbl.__CORE__",
+        "mandatory": true,
+        "username": "__SSH_USERNAME__"}m4_ifelse(__CORE__, __TOTAL_CORES__, `', `,')'
+    )m4_define(`__WORKER__', m4_incr(__WORKER__))'m4_dnl
+  )'m4_dnl
+)m4_dnl
+
+{
+  "entries": [
+    m4_ifdef(
+      `__SEQUENTIAL__',
+      `{"endpoint": "m4_substr(__WORKER_HOSTS__, 0, m4_index(__WORKER_HOSTS__, `_'))",
+        "command": "/home/__SSH_USERNAME__/pocs/pocs/vendor/ssb-dbgen/gen_data.sh -T l -s __SCALE_FACTOR__ -t lineorder.tbl",
+        "mandatory": true,
+        "username": "__SSH_USERNAME__"}',
+      `__PARALLEL__'
+    )m4_dnl
+  ]
+}

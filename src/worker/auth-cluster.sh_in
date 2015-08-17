@@ -1,0 +1,43 @@
+#!/bin/bash
+
+while getopts ":c:h" opt; do
+  case $opt in
+    c)
+      c=$OPTARG
+      ;;
+    h)
+      h=1
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG. -h for help." >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument. -h for help." >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ $h ]
+then
+  echo """
+  Description:
+  This script grants ssh access to the Redshift cluster upon EC2 instance boot.
+
+  Options:
+  -c    (Required) Redshift cluster identifier.
+  -h               Print this help message and exit.
+  """
+  exit 0
+fi
+
+set -o pipefail
+
+aws --region $(
+    curl http://169.254.169.254/latest/dynamic/instance-identity/document |
+    grep region |
+    awk -F\" '{print $4}'
+  ) redshift describe-clusters --cluster-identifier $c |
+  grep ClusterPublicKey |
+  awk -F\" '{print $4}' >> /home/__SSH_USERNAME__/.ssh/authorized_keys

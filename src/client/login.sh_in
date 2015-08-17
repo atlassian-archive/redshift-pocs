@@ -1,0 +1,3 @@
+#!/bin/bash
+
+PGPASSWORD=Pocs1234 psql -h __PGHOST__ -p 5439 -d pocs -U pocs

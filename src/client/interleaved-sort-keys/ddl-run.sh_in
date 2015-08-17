@@ -1,0 +1,16 @@
+#!/bin/bash
+
+export PGHOST=__PGHOST__
+export PGPORT=5439
+export PGDATABASE=pocs
+export PGUSER=pocs
+export PGPASSWORD=Pocs1234
+
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+cd $DIR
+
+echo "Running ddl-drop.sql."
+psql -f ddl-drop.sql
+echo "Running ddl-create.sql."
+psql -f ddl-create.sql

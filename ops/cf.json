@@ -1,0 +1,782 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Description": "Resources for Redshift proof of concepts.",
+
+  "Parameters": {
+
+    "Environment": {
+      "Description": "Dev opens up ssh access for worker nodes.",
+      "Type": "String",
+      "AllowedValues": [ "dev", "prod" ],
+      "Default": "prod"
+    },
+
+    "LocalIP": {
+      "Description": "Your local IP address.",
+      "Type": "String",
+      "AllowedPattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$",
+      "MinLength": 8,
+      "MaxLength": 16,
+      "ConstraintDescription": "Must be a valid IP address."
+    },
+
+    "ChartioIP": {
+      "Description": "Chartio's IP address.",
+      "Type": "String",
+      "AllowedPattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$",
+      "MinLength": 8,
+      "MaxLength": 16,
+      "ConstraintDescription": "Must be a valid IP address.",
+      "Default": "173.203.96.249"
+    },
+
+    "ClusterNodeCount": {
+      "Description": "The number of compute nodes in the Redshift cluster.",
+      "Type": "Number",
+      "Default": 1
+    },
+
+    "ClusterNodeType": {
+      "Description": "The type of compute node in the Redshift cluster.",
+      "Type": "String",
+      "Default": "dc1.large",
+      "AllowedValues": [
+        "dc1.large", "dc1.8xlarge", "ds1.xlarge", "ds1.8xlarge", "ds2.xlarge", "ds2.8xlarge"
+      ]
+    },
+
+    "WorkerNodeCount": {
+      "Description": "The number of EC2 worker nodes.",
+      "Type": "Number",
+      "Default": 0
+    },
+
+    "WorkerNodeType": {
+      "Description": "The type of EC2 worker nodes.",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [
+        "t2.micro", "t2.small", "t2.medium", "t2.large", "m4.large", "m4.xlarge", "m4.2xlarge",
+        "m4.4xlarge", "m4.10xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "c4.large",
+        "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge", "c3.large", "c3.xlarge",
+        "c3.2xlarge", "c3.4xlarge", "c3.8xlarge", "g2.2xlarge", "g2.8xlarge", "r3.large",
+        "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge",
+        "i2.4xlarge", "i2.8xlarge", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge"
+      ]
+    },
+
+    "KeyName": {
+      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to workers",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+    },
+
+    "ProvisionClientDeps": {
+      "Description": "Client SGs, IAM profiles, etc. will be provisioned if this is flagged.",
+      "Type": "Number",
+      "AllowedValues": [0, 1],
+      "Default": 0
+    },
+
+    "S3BucketExists": {
+      "Description": "Bucket will be created if this is not flagged.",
+      "Type": "Number",
+      "AllowedValues": [0, 1],
+      "Default": 0
+    }
+
+  },
+
+  "Mappings" : {
+
+    "AWSInstanceType2vCPU" : {
+      "t2.micro"    : { "vCPU": 1 },
+      "t2.small"    : { "vCPU": 1 },
+      "t2.medium"   : { "vCPU": 2 },
+      "t2.large"    : { "vCPU": 2 },
+      "m4.large"    : { "vCPU": 2 },
+      "m4.xlarge"   : { "vCPU": 4 },
+      "m4.2xlarge"  : { "vCPU": 8 },
+      "m4.4xlarge"  : { "vCPU": 16 },
+      "m4.10xlarge" : { "vCPU": 40 },
+      "m3.medium"   : { "vCPU": 1 },
+      "m3.large"    : { "vCPU": 2 },
+      "m3.xlarge"   : { "vCPU": 4 },
+      "m3.2xlarge"  : { "vCPU": 8 },
+      "c4.large"    : { "vCPU": 2 },
+      "c4.xlarge"   : { "vCPU": 4 },
+      "c4.2xlarge"  : { "vCPU": 8 },
+      "c4.4xlarge"  : { "vCPU": 16 },
+      "c4.8xlarge"  : { "vCPU": 36 },
+      "c3.large"    : { "vCPU": 2 },
+      "c3.xlarge"   : { "vCPU": 4 },
+      "c3.2xlarge"  : { "vCPU": 8 },
+      "c3.4xlarge"  : { "vCPU": 16 },
+      "c3.8xlarge"  : { "vCPU": 32 },
+      "g2.2xlarge"  : { "vCPU": 8 },
+      "g2.8xlarge"  : { "vCPU": 32 },
+      "r3.large"    : { "vCPU": 2 },
+      "r3.xlarge"   : { "vCPU": 4 },
+      "r3.2xlarge"  : { "vCPU": 8 },
+      "r3.4xlarge"  : { "vCPU": 16 },
+      "r3.8xlarge"  : { "vCPU": 32 },
+      "i2.xlarge"   : { "vCPU": 4 },
+      "i2.2xlarge"  : { "vCPU": 8 },
+      "i2.4xlarge"  : { "vCPU": 16 },
+      "i2.8xlarge"  : { "vCPU": 32 },
+      "d2.xlarge"   : { "vCPU": 4 },
+      "d2.2xlarge"  : { "vCPU": 8 },
+      "d2.4xlarge"  : { "vCPU": 16 },
+      "d2.8xlarge"  : { "vCPU": 36 }
+    },
+
+    "AWSRegion2AMI" : {
+      "us-east-1"      : { "AMI": "ami-0d6dda66" },
+      "us-west-2"      : { "AMI": "ami-ebb6a3db" },
+      "eu-west-1"      : { "AMI": "ami-ce1649b9" },
+      "eu-central-1"   : { "AMI": "ami-36888f2b" },
+      "ap-southeast-1" : { "AMI": "ami-aaf2fcf8" },
+      "ap-southeast-2" : { "AMI": "ami-31397b0b" },
+      "ap-northeast-1" : { "AMI": "ami-603ebb60" }
+    }
+
+  },
+
+  "Conditions": {
+
+    "IsDev": { "Fn::Equals": [ { "Ref": "Environment" }, "dev" ] },
+
+    "IsMultiNodeCluster": {
+      "Fn::Not": [ {
+        "Fn::Equals": [ { "Ref": "ClusterNodeCount" }, 1 ]
+      } ]
+    },
+
+    "ProvisionWorkers": {
+      "Fn::Not": [
+        { "Fn::Equals": [ { "Ref": "WorkerNodeCount" }, 0 ] }
+      ]
+    },
+
+    "ProvisionWorkerDependencies": {
+      "Fn::Or": [
+        { "Condition": "ProvisionWorkers" },
+        { "Fn::Equals": [ {"Ref": "Environment"}, "dev" ] }
+      ]
+    },
+
+    "ProvisionClientDependencies": { "Fn::Equals": [ { "Ref": "ProvisionClientDeps" }, 1 ] },
+
+    "CreateS3Bucket": { "Fn::Equals": [ { "Ref": "S3BucketExists" }, 0 ] }
+
+  },
+
+  "Resources": {
+
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "InstanceTenancy": "default",
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "VPC" ] ] }
+        } ]
+      }
+    },
+
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "InternetGateway" ] ] }
+        } ]
+      }
+    },
+
+    "InternetGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+
+    "Subnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [ 0, { "Fn::GetAZs": { "Ref": "AWS::Region" } } ]
+        },
+        "CidrBlock": "10.0.0.0/24",
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "Subnet" ] ] }
+        } ],
+        "VpcId": { "Ref": "VPC" }
+      }
+    },
+
+    "RouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "RouteTable" ] ] }
+        } ]
+      }
+    },
+
+    "RouteTableRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": { "Ref": "RouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+
+    "RouteTableSubnetAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "RouteTable" },
+        "SubnetId": { "Ref": "Subnet" }
+      }
+    },
+
+    "Cluster": {
+      "Type": "AWS::Redshift::Cluster",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "ClusterType": { "Fn::If": [ "IsMultiNodeCluster", "multi-node", "single-node" ] },
+        "NumberOfNodes": {
+          "Fn::If": [
+            "IsMultiNodeCluster",  { "Ref": "ClusterNodeCount" }, { "Ref": "AWS::NoValue" }
+          ]
+        },
+        "NodeType": { "Ref": "ClusterNodeType" },
+        "DBName": "pocs",
+        "MasterUsername": "pocs",
+        "MasterUserPassword": "Pocs1234",
+        "ClusterParameterGroupName": { "Ref": "ClusterParameterGroup" },
+        "VpcSecurityGroupIds": [ { "Ref": "ClusterSecurityGroup" } ],
+        "ClusterSubnetGroupName": { "Ref": "ClusterSubnetGroup" },
+        "PubliclyAccessible": true,
+        "Port": 5439
+      }
+    },
+
+    "ClusterSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription":  "Security group for Redshift POC cluster.",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5439,
+            "ToPort": 5439,
+            "CidrIp": { "Fn::Join": [ "", [ { "Ref": "LocalIP" }, "/32" ] ] }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5439,
+            "ToPort": 5439,
+            "CidrIp": { "Fn::Join": [ "", [ { "Ref": "ChartioIP" }, "/32" ] ] }
+          },
+          { "Fn::If":
+            [
+              "ProvisionWorkerDependencies",
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 5439,
+                "ToPort": 5439,
+                "SourceSecurityGroupId": { "Ref": "WorkerSecurityGroup"}
+              },
+              {}
+            ]
+          },
+          { "Fn::If":
+            [
+              "ProvisionClientDependencies",
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 5439,
+                "ToPort": 5439,
+                "SourceSecurityGroupId": { "Ref": "ClientSecurityGroup"}
+              },
+              {}
+            ]
+          }
+        ],
+        "SecurityGroupEgress": [
+          { "Fn::If":
+            [
+              "ProvisionWorkerDependencies",
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 22,
+                "ToPort": 22,
+                "DestinationSecurityGroupId": { "Ref": "WorkerSecurityGroup"}
+              },
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 0,
+                "ToPort": 65535,
+                "CidrIp": "127.0.0.0/32"
+              }
+            ]
+          }
+        ],
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "ClusterSecurityGroup" ] ] }
+        } ],
+        "VpcId": { "Ref": "VPC" }
+      }
+    },
+
+    "ClusterParameterGroup": {
+      "Type": "AWS::Redshift::ClusterParameterGroup",
+      "Properties": {
+        "Description": "Cluster parameter group",
+        "ParameterGroupFamily": "redshift-1.0",
+        "Parameters": [{
+          "ParameterName": "enable_user_activity_logging",
+          "ParameterValue": false
+        }]
+      }
+    },
+
+    "ClusterSubnetGroup": {
+      "Type": "AWS::Redshift::ClusterSubnetGroup",
+      "Properties": {
+        "Description": "Cluster subnet group",
+        "SubnetIds": [ { "Ref": "Subnet" } ]
+      }
+    },
+
+    "WorkerLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "DependsOn": ["InternetGatewayAttachment", "Cluster"],
+      "Condition": "ProvisionWorkers",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "configSets" : {
+            "Install" : [ "Install" ]
+          },
+          "Install" : {
+            "files" : {
+              "/etc/cfn/cfn-hup.conf" : {
+                "content" : { "Fn::Join" : ["", [
+                  "[main]\n",
+                  "stack=", { "Ref" : "AWS::StackId" }, "\n",
+                  "region=", { "Ref" : "AWS::Region" }, "\n"
+                ]]},
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf" : {
+                "content": { "Fn::Join" : ["", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.WorkerLaunchConfig.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/usr/local/bin/cfn-init -v ",
+                  "         --stack ", { "Ref" : "AWS::StackName" },
+                  "         --resource WorkerLaunchConfig ",
+                  "         --configsets Install ",
+                  "         --region ", { "Ref" : "AWS::Region" }, "\n",
+                  "runas=root\n"
+                ]]}
+              }
+            },
+            "services" : {
+              "cfn-hup": {
+                "enabled": "true", "ensureRunning": "true",
+                "files": ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"]
+              }
+            },
+            "commands" : {
+              "auth-cluster" : {
+                "command" : { "Fn::Join" : [ "", [
+                  "./pocs/pocs/worker/auth-cluster.sh -c ",
+                  { "Ref": "Cluster" }
+                ] ] },
+                "cwd" : "/home/ubuntu"
+              }
+            }
+          }
+        }
+      },
+      "Properties": {
+        "AssociatePublicIpAddress": true,
+        "ImageId": { "Fn::FindInMap" : [ "AWSRegion2AMI", { "Ref" : "AWS::Region" }, "AMI" ] },
+        "SecurityGroups": [ { "Ref": "WorkerSecurityGroup" } ],
+        "InstanceMonitoring": false,
+        "InstanceType": { "Ref": "WorkerNodeType" },
+        "IamInstanceProfile": { "Ref": "WorkerIAMInstanceProfile" },
+        "KeyName": { "Ref" : "KeyName" },
+        "UserData": {
+          "Fn::Base64" : { "Fn::Join" : ["", [
+            "#!/bin/bash -xe\n",
+
+            "/usr/local/bin/cfn-init ",
+            "         --stack ", { "Ref" : "AWS::StackName" },
+            "         --resource WorkerLaunchConfig ",
+            "         --configsets Install ",
+            "         --region ", { "Ref" : "AWS::Region" }, "\n",
+
+            "/usr/local/bin/cfn-signal -e $? ",
+            "         --stack ", { "Ref" : "AWS::StackName" },
+            "         --resource WorkerAutoScalingGroup ",
+            "         --region ", { "Ref" : "AWS::Region" }, "\n"
+        ]]}}
+      }
+    },
+
+    "WorkerAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Condition": "ProvisionWorkers",
+      "Properties": {
+        "VPCZoneIdentifier": [ { "Ref": "Subnet" } ],
+        "LaunchConfigurationName": { "Ref": "WorkerLaunchConfig" },
+        "MinSize": { "Ref": "WorkerNodeCount" },
+        "MaxSize": { "Ref": "WorkerNodeCount" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "WorkerAutoScalingGroup" ] ] } ,
+            "PropagateAtLaunch": true
+          }
+        ]
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Count": { "Ref": "WorkerNodeCount" },
+          "Timeout" : "PT5M"
+        }
+      }
+    },
+
+    "WorkerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "ProvisionWorkerDependencies",
+      "Properties": {
+        "GroupDescription":  "Security group for Redshift POC worker(s).",
+        "SecurityGroupIngress": [
+          { "Fn::If":
+            [
+              "IsDev",
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 22,
+                "ToPort": 22,
+                "CidrIp": { "Fn::Join": [ "", [ { "Ref": "LocalIP" }, "/32" ] ] }
+              },
+              {}
+            ]
+          }
+        ],
+        "SecurityGroupEgress": [
+          { "Fn::If":
+            [
+              "IsDev",
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 0,
+                "ToPort": 65535,
+                "CidrIp": "0.0.0.0/0"
+              },
+              {
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ],
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "WorkerSecurityGroup" ] ] }
+        } ],
+        "VpcId": { "Ref": "VPC" }
+      }
+    },
+
+    "WorkerClusterIngressRule": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "ProvisionWorkerDependencies",
+      "Properties": {
+        "IpProtocol": "tcp",
+        "FromPort": 22,
+        "ToPort": 22,
+        "SourceSecurityGroupId": { "Ref": "ClusterSecurityGroup"},
+        "GroupId": { "Ref": "WorkerSecurityGroup" }
+      }
+    },
+
+    "WorkerClusterEgressRule": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Condition": "ProvisionWorkerDependencies",
+      "Properties": {
+        "IpProtocol": "tcp",
+        "FromPort": 5439,
+        "ToPort": 5439,
+        "DestinationSecurityGroupId": { "Ref": "ClusterSecurityGroup"},
+        "GroupId": { "Ref": "WorkerSecurityGroup" }
+      }
+    },
+
+    "WorkerIAMRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "ProvisionWorkerDependencies",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path": "/"
+      }
+    },
+
+    "WorkerIAMRolePolicy": {
+       "Type": "AWS::IAM::Policy",
+       "Condition": "ProvisionWorkerDependencies",
+       "Properties": {
+          "PolicyName" : "WorkerIAMRolePolicy",
+          "PolicyDocument" : {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": "redshift:DescribeClusters",
+                "Effect": "Allow",
+                "Resource": "*"
+              }
+            ]
+          },
+          "Roles" : [ { "Ref": "WorkerIAMRole" } ]
+       }
+    },
+
+    "WorkerIAMInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Condition": "ProvisionWorkerDependencies",
+      "DependsOn": "WorkerIAMRolePolicy",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ { "Ref": "WorkerIAMRole" } ]
+      }
+    },
+
+    "ClientSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "ProvisionClientDependencies",
+      "Properties": {
+        "GroupDescription":  "Security group for Redshift POC client.",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": { "Fn::Join": [ "", [ { "Ref": "LocalIP" }, "/32" ] ] }
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 0,
+            "ToPort": 65535,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Fn::Join" : [ "-", [ { "Ref": "AWS::StackName" }, "ClientSecurityGroup" ] ] }
+        } ],
+        "VpcId": { "Ref": "VPC" }
+      }
+    },
+
+    "ClientIAMRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "ProvisionClientDependencies",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path": "/"
+      }
+    },
+
+    "ClientIAMRolePolicy": {
+       "Type": "AWS::IAM::Policy",
+       "Condition": "ProvisionClientDependencies",
+       "Properties": {
+          "PolicyName" : "ClientIAMRolePolicy",
+          "PolicyDocument" : {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": "cloudformation:DescribeStacks",
+                "Effect": "Allow",
+                "Resource": "*"
+              },
+              {
+                "Action": "ec2:DescribeInstances",
+                "Effect": "Allow",
+                "Resource": "*"
+              },
+              {
+                "Action": "s3:*",
+                "Effect": "Allow",
+                "Resource": [
+                  {"Fn::Join" : ["", ["arn:aws:s3:::", { "Ref": "AWS::StackName" } ]]},
+                  {"Fn::Join" : ["", ["arn:aws:s3:::", { "Ref": "AWS::StackName" }, "/*" ]]}
+                ]
+              }
+            ]
+          },
+          "Roles" : [ { "Ref": "ClientIAMRole" } ]
+       }
+    },
+
+    "ClientIAMInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Condition": "ProvisionClientDependencies",
+      "DependsOn": "ClientIAMRolePolicy",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ { "Ref": "ClientIAMRole" } ]
+      }
+    },
+
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CreateS3Bucket",
+      "Properties": {
+        "BucketName": { "Ref": "AWS::StackName" },
+        "Tags": [ {
+          "Key": "Name",
+          "Value": { "Ref": "AWS::StackName" }
+        } ]
+      },
+      "DeletionPolicy" : "Retain"
+    },
+
+    "S3BucketPolicy" : {
+      "Type" : "AWS::S3::BucketPolicy",
+      "Properties" : {
+        "Bucket" : { "Ref": "AWS::StackName" },
+        "PolicyDocument": {
+          "Statement":[
+            {
+              "Principal": "*",
+              "Action": "*",
+              "Effect": "Allow",
+              "Resource": [
+                { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref": "AWS::StackName" } ]]},
+                { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref": "AWS::StackName" } , "/*" ]]}
+              ],
+              "Condition": { "Fn::If": [
+                "ProvisionWorkerDependencies",
+                {
+                  "ArnEquals": {
+                    "aws:SourceArn": { "Fn::GetAtt": ["WorkerIAMRole", "Arn"] }
+                  }
+                },
+                {}
+              ] }
+            }
+          ]
+        }
+      }
+    }
+
+  },
+
+  "Outputs": {
+
+    "SubnetId": {
+      "Description": "Subnet id",
+      "Value": { "Ref": "Subnet" }
+    },
+
+    "SubnetAvailabilityZone": {
+      "Description": "Subnet availability zone",
+      "Value": { "Fn::GetAtt": [ "Subnet", "AvailabilityZone" ] }
+    },
+
+    "ClusterHost": {
+      "Description": "Cluster hostname",
+      "Value": { "Fn::GetAtt": [ "Cluster", "Endpoint.Address" ] }
+    },
+
+    "WorkerSecurityGroupId": {
+      "Description": "Worker security group id",
+      "Condition": "ProvisionWorkerDependencies",
+      "Value": { "Ref": "WorkerSecurityGroup" }
+    },
+
+    "WorkerIAMRoleARN": {
+      "Description": "Worker IAM Role ARN",
+      "Condition": "ProvisionWorkerDependencies",
+      "Value": { "Fn::GetAtt": ["WorkerIAMRole", "Arn"] }
+    },
+
+    "WorkerIAMInstanceProfileARN": {
+      "Description": "Worker IAM instance profile ARN",
+      "Condition": "ProvisionWorkerDependencies",
+      "Value": { "Fn::GetAtt": ["WorkerIAMInstanceProfile", "Arn"] }
+    },
+
+    "vCPUPerWorker": {
+      "Description": "# of vCPUs per worker node.",
+      "Value": {
+        "Fn::FindInMap" : [ "AWSInstanceType2vCPU", { "Ref" : "WorkerNodeType" }, "vCPU" ]
+      }
+    },
+
+    "ClientSecurityGroupId": {
+      "Description": "Client security group id",
+      "Condition": "ProvisionClientDependencies",
+      "Value": { "Ref": "ClientSecurityGroup" }
+    },
+
+    "ClientIAMRoleARN": {
+      "Description": "Client IAM Role ARN",
+      "Condition": "ProvisionClientDependencies",
+      "Value": { "Fn::GetAtt": ["ClientIAMRole", "Arn"] }
+    },
+
+    "ClientIAMInstanceProfileARN": {
+      "Description": "Client IAM instance profile ARN",
+      "Condition": "ProvisionClientDependencies",
+      "Value": { "Fn::GetAtt": ["ClientIAMInstanceProfile", "Arn"] }
+    },
+
+    "S3BucketName": {
+      "Description": "S3 bucket for manifest files.",
+      "Value": { "Ref": "AWS::StackName" }
+    }
+
+  }
+}

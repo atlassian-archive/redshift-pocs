@@ -1,0 +1,447 @@
+with
+
+years(year_id, year) as (
+  select i, 'Year ' || i
+  from generate_series(0, 3) i
+),
+
+regions(region_id, region) as (
+  select i, 'Region ' || i
+  from generate_series(0, 3) i
+),
+
+customers(customer_id, customer) as (
+  select i, 'Customer ' || i
+  from generate_series(0, 3) i
+),
+
+products(product_id, product) as (
+  select i, 'Product ' || i
+  from generate_series(0, 3) i
+),
+
+base as (
+  select
+    *,
+    year_id::bit(2)::varchar as year_id_bit,
+    region_id::bit(2)::varchar as region_id_bit,
+    customer_id::bit(2)::varchar as customer_id_bit,
+    product_id::bit(2)::varchar as product_id_bit
+  from years, regions, customers, products
+),
+
+compound as (
+  select
+    (row_number() over (
+        order by  year_id, region_id, customer_id, product_id
+      )
+      -1)/16 as block,
+    year_id,
+    region_id,
+    customer_id,
+    product_id,
+    year,
+    region,
+    customer,
+    product
+  from base
+  order by
+    year_id,
+    region_id,
+    customer_id,
+    product_id
+),
+
+compound_zone_map as (
+  select
+    block,
+    min(year_id) min_year,
+    max(year_id) max_year,
+    min(region_id) min_region,
+    max(region_id) max_region,
+    min(customer_id) min_customer,
+    max(customer_id) max_customer,
+    min(product_id) min_product,
+    max(product_id) max_product
+  from compound
+  group by block
+),
+
+compound_zone_map_selectivity as (
+  select
+
+    (avg(year_cnt)::numeric/(select count(*) from compound_zone_map)::numeric)
+      as year_selectivity,
+
+    (avg(region_cnt)::numeric/(select count(*) from compound_zone_map)::numeric)
+      as region_selectivity,
+
+    (avg(customer_cnt)::numeric/(select count(*) from compound_zone_map)::numeric)
+      as customer_selectivity,
+
+    (avg(product_cnt)::numeric/(select count(*) from compound_zone_map)::numeric)
+      as product_selectivity,
+
+    ((avg(year_cnt)::numeric/(select count(*) from compound_zone_map)::numeric)
+      + (avg(region_cnt)::numeric/(select count(*) from compound_zone_map)::numeric)
+      + (avg(customer_cnt)::numeric/(select count(*) from compound_zone_map)::numeric)
+      + (avg(product_cnt)::numeric/(select count(*) from compound_zone_map)::numeric))
+        / 4 as average_selectivity
+
+  from generate_series(0, 3) i
+  left join lateral (
+    select count(*) as year_cnt
+    from compound_zone_map
+    where i between min_year and max_year
+  ) y on 1=1
+  left join lateral (
+    select count(*) as region_cnt
+    from compound_zone_map
+    where i between min_region and max_region
+  ) r on 1=1
+  left join lateral (
+    select count(*) as customer_cnt
+    from compound_zone_map
+    where i between min_customer and max_customer
+  ) c on 1=1
+  left join lateral (
+    select count(*) as product_cnt
+    from compound_zone_map
+    where i between min_product and max_product
+  ) p on 1=1
+),
+
+-- There's probably a smarter bit-twiddling way to do the interleaving
+interleaved as (
+  select
+    ((row_number() over (
+      order by  substr(year_id_bit, 1, 1)
+        || substr(region_id_bit, 1, 1)
+        || substr(customer_id_bit, 1, 1)
+        || substr(product_id_bit, 1, 1)
+
+        || substr(year_id_bit, 2, 1)
+        || substr(region_id_bit, 2, 1)
+        || substr(customer_id_bit, 2, 1)
+        || substr(product_id_bit, 2, 1)
+      )
+      -1)/16
+    ) as block,
+
+    (substr(year_id_bit, 1, 1)
+      || substr(region_id_bit, 1, 1)
+      || substr(customer_id_bit, 1, 1)
+      || substr(product_id_bit, 1, 1)
+
+      || substr(year_id_bit, 2, 1)
+      || substr(region_id_bit, 2, 1)
+      || substr(customer_id_bit, 2, 1)
+      || substr(product_id_bit, 2, 1)
+    ) as interleaved_id,
+
+    year_id,
+    region_id,
+    customer_id,
+    product_id,
+    year,
+    region,
+    customer,
+    product
+  from base
+  order by interleaved_id asc
+),
+
+interleaved_zone_map as (
+  select
+    block,
+    min(year_id) min_year,
+    max(year_id) max_year,
+    min(region_id) min_region,
+    max(region_id) max_region,
+    min(customer_id) min_customer,
+    max(customer_id) max_customer,
+    min(product_id) min_product,
+    max(product_id) max_product
+  from interleaved
+  group by block
+),
+
+interleaved_zone_map_selectivity as (
+  select
+
+    (avg(year_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric)
+      as year_selectivity,
+
+    (avg(region_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric)
+      as region_selectivity,
+
+    (avg(customer_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric)
+      as customer_selectivity,
+
+    (avg(product_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric)
+      as product_selectivity,
+
+    ((avg(year_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric)
+      + (avg(region_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric)
+      + (avg(customer_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric)
+      + (avg(product_cnt)::numeric/(select count(*) from interleaved_zone_map)::numeric))
+        / 4 as average_selectivity
+
+  from generate_series(0, 3) i
+  left join lateral (
+    select count(*) as year_cnt
+    from interleaved_zone_map
+    where i between min_year and max_year
+  ) y on 1=1
+  left join lateral (
+    select count(*) as region_cnt
+    from interleaved_zone_map
+    where i between min_region and max_region
+  ) r on 1=1
+  left join lateral (
+    select count(*) as customer_cnt
+    from interleaved_zone_map
+    where i between min_customer and max_customer
+  ) c on 1=1
+  left join lateral (
+    select count(*) as product_cnt
+    from interleaved_zone_map
+    where i between min_product and max_product
+  ) p on 1=1
+)
+
+/*---------------------------------------------------------------------
+
+Take a look at the resulting zone maps for each sort style
+
+----------------------------------------------------------------------*/
+-- select *
+-- from compound_zone_map
+-- order by block
+
+-- select *
+-- from interleaved_zone_map
+-- order by block
+
+
+/*---------------------------------------------------------------------
+
+Spot check how well each sort style's zone map facilitates pruning
+
+------------------------------------------------------------------*/
+
+/*-----------------------------------------
+1 of 4 sort key predicates
+----------------------------------------*/
+
+/*--------------------------
+Compound: 4 blocks
+Interleaved: 8 blocks
+-------------------------*/
+-- select count(*)
+-- from compound_zone_map
+-- where 1 between min_year and max_year
+
+-- select count(*)
+-- from interleaved_zone_map
+-- where 1 between min_year and max_year
+
+/*--------------------------
+Compound: 16 blocks
+Interleaved: 8 blocks
+-------------------------*/
+-- select count(*)
+-- from compound_zone_map
+-- where 2 between min_product and max_product
+
+-- select count(*)
+-- from interleaved_zone_map
+-- where 2 between min_product and max_product
+
+/*-----------------------------------------
+2 of 4 sort key predicates
+----------------------------------------*/
+
+/*--------------------------
+Compound: 4 blocks
+Interleaved: 4 blocks
+-------------------------*/
+-- select count(*)
+-- from compound_zone_map
+-- where 0 between min_year and max_year
+--  and 3 between min_customer and max_customer
+
+-- select count(*)
+-- from interleaved_zone_map
+-- where 0 between min_year and max_year
+--  and 3 between min_customer and max_customer
+
+/*--------------------------
+Compound: 16 blocks
+Interleaved: 4 blocks
+-------------------------*/
+-- select count(*)
+-- from compound_zone_map
+-- where 3 between min_customer and max_customer
+--  and 2 between min_product and max_product
+
+-- select count(*)
+-- from interleaved_zone_map
+-- where 3 between min_customer and max_customer
+--  and 2 between min_product and max_product
+
+/*-----------------------------------------
+3 of 4 sort key predicates
+----------------------------------------*/
+
+/*--------------------------
+Compound: 4 blocks
+Interleaved: 2 blocks
+-------------------------*/
+-- select count(*)
+-- from  compound_zone_map
+-- where 3 between min_year and max_year
+--  and 1 between min_customer and max_customer
+--  and 0 between min_product and max_product
+
+-- select count(*)
+-- from  interleaved_zone_map
+-- where 3 between min_year and max_year
+--  and 1 between min_customer and max_customer
+--  and 0 between min_product and max_product
+
+/*--------------------------
+Compound: 4 blocks
+Interleaved: 2 blocks
+-------------------------*/
+-- select count(*)
+-- from  compound_zone_map
+-- where 1 between min_region and max_region
+--  and 0 between min_customer and max_customer
+--  and 2 between min_product and max_product
+
+-- select count(*)
+-- from  interleaved_zone_map
+-- where 1 between min_region and max_region
+--  and 0 between min_customer and max_customer
+--  and 2 between min_product and max_product
+
+/*-----------------------------------------
+4 of 4 sort key predicates
+----------------------------------------*/
+
+/*--------------------------
+Compound: 1 block
+Interleaved: 1 block
+-------------------------*/
+-- select count(*)
+-- from  compound_zone_map
+-- where 0 between min_year and max_year
+--  and 0 between min_region and max_region
+--  and 3 between min_customer and max_customer
+--  and 2 between min_product and max_product
+
+-- select count(*)
+-- from  interleaved_zone_map
+-- where 0 between min_year and max_year
+--  and 0 between min_region and max_region
+--  and 3 between min_customer and max_customer
+--  and 2 between min_product and max_product
+
+
+/*---------------------------------------------------------------------
+
+Ideally, the block selectivity of a where clause can be calculated as
+follows with the interleaved sort style:
+
+N^((S-P)/S)
+
+where
+N = total # of blocks
+S = # of columns in the sort key
+P = # of sort key columns specified in the where clause
+
+When comparing the average selectivity of the interleaved sort style to
+that of the compound sort style we can see that the interleaved sort
+style is preferable for ad hoc multidimensional analysis
+
+----------------------------------------------------------------------*/
+-- select
+--   'compound' as style,
+
+--   (select count(*) from compound_zone_map) total,
+
+--   (select average_selectivity from compound_zone_map_selectivity)
+--     as one_pred_selectivity,
+
+--   ceil(
+--     ((select average_selectivity from compound_zone_map_selectivity)::numeric)
+--       * (select count(*) from compound_zone_map)::numeric
+--   ) as one_pred_cnt,
+
+--   pow((select average_selectivity from compound_zone_map_selectivity), 2)
+--     as two_pred_selectivity,
+
+--   ceil(
+--     pow((select average_selectivity from compound_zone_map_selectivity), 2)
+--       *  (select count(*) from compound_zone_map)::numeric
+--   ) as two_pred_cnt,
+
+--   pow((select average_selectivity from compound_zone_map_selectivity), 3)
+--     as three_pred_selectivity,
+
+--   ceil(
+--     pow((select average_selectivity from compound_zone_map_selectivity), 3)
+--       *  (select count(*) from compound_zone_map)::numeric
+--   ) as three_pred_cnt,
+
+--   pow((select average_selectivity from compound_zone_map_selectivity), 4)
+--     as four_pred_selectivity,
+
+--   ceil(
+--     pow((select average_selectivity from compound_zone_map_selectivity), 4)
+--       *  (select count(*) from compound_zone_map)::numeric
+--   ) as four_pred_cnt
+
+-- from compound_zone_map_selectivity
+
+-- union
+
+-- select
+--   'interleaved' as style,
+
+--   (select count(*) from interleaved_zone_map) total,
+
+--   (select average_selectivity from interleaved_zone_map_selectivity)
+--     as one_pred_selectivity,
+
+--   ceil(
+--     ((select average_selectivity from interleaved_zone_map_selectivity)::numeric)
+--       * (select count(*) from interleaved_zone_map)::numeric
+--   ) as one_pred_cnt,
+
+--   pow((select average_selectivity from interleaved_zone_map_selectivity), 2)
+--     as two_pred_selectivity,
+
+--   ceil(
+--     pow((select average_selectivity from interleaved_zone_map_selectivity), 2)
+--       *  (select count(*) from interleaved_zone_map)::numeric
+--   ) as two_pred_cnt,
+
+--   pow((select average_selectivity from interleaved_zone_map_selectivity), 3)
+--     as three_pred_selectivity,
+
+--   ceil(
+--     pow((select average_selectivity from interleaved_zone_map_selectivity), 3)
+--       *  (select count(*) from interleaved_zone_map)::numeric
+--   ) as three_pred_cnt,
+
+--   pow((select average_selectivity from interleaved_zone_map_selectivity), 4)
+--     as four_pred_selectivity,
+
+--   ceil(
+--     pow((select average_selectivity from interleaved_zone_map_selectivity), 4)
+--       *  (select count(*) from interleaved_zone_map)::numeric
+--   ) as four_pred_cnt
+
+-- from interleaved_zone_map_selectivity

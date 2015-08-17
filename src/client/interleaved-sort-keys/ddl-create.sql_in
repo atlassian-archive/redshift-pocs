@@ -1,0 +1,125 @@
+set search_path to pocs, '$user', public;
+set wlm_query_slot_count to 5;
+
+-- Helpers to escape m4 quotes.
+m4_define(`LQ',`m4_changequote(<,>)`m4_dnl'
+m4_changequote`'')
+m4_define(`RQ',`m4_changequote(<,>)m4_dnl`
+'m4_changequote`'')
+
+-- Add field with a LQ()date`'LQ() data type to facilitate LQ()between`'LQ().
+create table dwdate2 as
+select *, to_date(d_datekey, 'YYYYMMDD') as d_date2 from dwdate
+;
+
+-- Create tables with single, compound, and interleaved sort keys.
+create table orders_single
+sortkey (c_custkey)
+as (
+  select
+    c_custkey,
+    c_region,
+    c_mktsegment,
+    d_date2 as d_date,
+    p_category,
+    p_brand1,
+    p_color,
+    p_type,
+    lo_orderkey,
+    lo_revenue
+  from
+    customer,
+    part,
+    lineorder,
+    dwdate2
+  where lo_custkey = c_custkey
+    and lo_partkey = p_partkey
+    and lo_orderdate = dwdate2.d_datekey
+    and lo_revenue > 0
+)
+;
+
+create table orders_compound
+compound sortkey (c_custkey, c_region, c_mktsegment, d_date)
+as select * from orders_single
+;
+
+create table orders_interleaved_4
+interleaved sortkey (c_custkey, c_region, c_mktsegment, d_date)
+as select * from orders_single
+;
+
+create table orders_interleaved_8
+interleaved sortkey (
+  c_custkey, c_region, c_mktsegment, p_category, p_brand1, p_color, p_type, d_date
+)
+as select * from orders_single
+;
+
+-- Create a table skewed on customer by assigning half of the records to
+-- LQ()c_custkey`'LQ() 1.
+create table orders_interleaved_skew_custkey
+interleaved sortkey (c_custkey, c_region, c_mktsegment, d_date)
+as
+with
+
+t1 as (
+  select
+    c_custkey,
+    percentile_disc(.5)
+      within group (order by c_custkey)
+      over()
+      as median_custkey
+  from orders_single
+),
+
+t2 as (
+  select distinct median_custkey from t1
+)
+
+select
+  case
+    when c_custkey < (select median_custkey from t2) then 1
+    else c_custkey
+  end as c_custkey,
+  c_region,
+  c_mktsegment,
+  d_date,
+  p_category,
+  p_brand1,
+  p_color,
+  p_type,
+  lo_orderkey,
+  lo_revenue
+from orders_single
+;
+
+-- Setup a table to be skewed on date by withholding data beyond 1997.
+-- Additional data will be added in LQ()implementation.sql`'LQ() to actually create the
+-- skew.
+create table orders_interleaved_skew_date
+interleaved sortkey (c_custkey, c_region, c_mktsegment, d_date)
+as select * from orders_single where d_date < '01/01/1998'
+;
+
+-- Create archive and current tables with an overlaying view.
+create table orders_current
+compound sortkey (lo_orderkey)
+as select * from orders_single where d_date >= '05/01/1998' order by lo_orderkey
+;
+
+create table orders_archive
+interleaved sortkey (c_custkey, c_region, c_mktsegment, d_date)
+as select * from orders_single where d_date < '05/01/1998'
+;
+
+create view orders_view
+as
+select * from orders_current
+union all
+select * from orders_archive
+;
+
+-- Cleanup
+vacuum;
+analyze;

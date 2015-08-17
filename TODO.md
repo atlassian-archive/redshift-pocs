@@ -1,0 +1,17 @@
+# TODO
+- READMEs
+  - add note about aws keys and worker IAM policy (redshift *)
+- investigate using tpc-ds instead of ssb
+- refactor cmake and m4 files
+  - fetch cf data once and replace awk with cmake regex
+  - check required params in cmake
+  - require specific versions of cmake build deps
+- http://docs.aws.amazon.com/redshift/latest/mgmt/connecting-drop-issues.html
+- http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/enhanced-networking.html
+- http://docs.aws.amazon.com/redshift/latest/dg/load-from-host-steps-get-the-host-key.html
+- vpc endpoint (when cloudformation supports this)
+  - remove public ip from workers for prod env
+  - amend worker and cluster security groups egress
+  - http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/vpc-endpoints.html#vpc-endpoint-policies
+  - http://docs.aws.amazon.com/AmazonS3/latest/dev/example-bucket-policies-vpc-endpoint.html
+- parallelize ops/create_images.sh

@@ -1,0 +1,10 @@
+{
+  "entries": [
+    {
+      "endpoint": "m4_ifelse(m4_index(__WORKER_HOSTS__, `_'), -1, __WORKER_HOSTS__, m4_substr(__WORKER_HOSTS__, 0, m4_index(__WORKER_HOSTS__, `_')))",
+      "command": "/home/__SSH_USERNAME__/pocs/pocs/vendor/ssb-dbgen/gen_data.sh -T d -s __SCALE_FACTOR__ -t date.tbl",
+      "mandatory": true,
+      "username": "__SSH_USERNAME__"
+    }
+  ]
+}
