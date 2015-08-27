@@ -1,6 +1,5 @@
 # TODO
-- READMEs
-  - add note about aws keys and worker IAM policy (redshift *)
+- investigate using COPY instead of CTAS
 - investigate using tpc-ds instead of ssb
 - refactor cmake and m4 files
   - fetch cf data once and replace awk with cmake regex
