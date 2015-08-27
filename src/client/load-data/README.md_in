@@ -1,11 +1,27 @@
-## Loading the cluster
+## Load Data
+
+### Usage
+
+```
+./load_data.sh
+```
 
 This loads each table unsorted with an even distribution. Column encodings are determined by
 compupdate.
 
-### Load times
+### Rough Load Times and Costs
 
+```
  Scale | Rows |  Size  | RS Inst Type | RS # | EC2 Inst Type | EC2 # | vCPU | ECU | Load Time | $/hr
 -------+------+--------+--------------+------+---------------+-------+------+-----+-----------+-------
 100      600 M    60 GB      dc1.large      4      c4.2xlarge       1      8    31       30:03    1.44
 1000       6 B   600 GB    dc1.8xlarge      4      c3.8xlarge       4    128   432       26:36   25.92
+```
+
+### Notes
+
+- In a production environment, long term AWS Access Keys should not be embedded
+  in Redshift's COPY command. Ideally, Redshift would be integrated with IAM
+  and you could assign the cluster an IAM Role that manages the keys
+  transparently without embedding them in the COPY command. Unfortunately, that
+  is not an option at the moment.

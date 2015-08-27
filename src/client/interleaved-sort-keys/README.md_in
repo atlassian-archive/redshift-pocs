@@ -1,15 +1,31 @@
 ## Interleaved Sort Keys
 
+For detailed info on this POC, see the blog post [here]().
+
+### Usage
+
+- See `../load-data` to load the cluster.
+- Run `./ddl-run.sh`
+- Follow along with `implementation.sql`
+
 ### DDL Times
 
+```
  Scale | Rows |  Size  | RS Inst Type | RS # |      Time | $/hr
 -------+------+--------+--------------+------+-----------+-------
 100      600 M    60 GB      dc1.large      4     2:35:25
 1000       6 B   600 GB    dc1.8xlarge      4    19:48:10
+```
+
+**Note:** `./ddl-create.sql` uses CTAS for convenience which does not
+scale as well as COPY, hence the extended execution times. This should
+probably be reworked to use COPY.
 
 ### Benchmark Times
 
+```
  Scale | Rows |  Size  | RS Inst Type | RS # |      Time | $/hr
 -------+------+--------+--------------+------+-----------+-------
 100      600 M    60 GB      dc1.large      4       17:30
 1000       6 B   600 GB    dc1.8xlarge      4       24:08
+```
