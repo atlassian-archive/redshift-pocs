@@ -498,6 +498,14 @@ order by compressed_val
 
 */
 
+
+/*
+
+Pause here, and run ./benchmark-run.sh to compute benchmark results.
+
+*/
+
+
 vacuum reindex orders_interleaved_skew_date;
 
 /*
